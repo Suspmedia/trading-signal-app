@@ -29,9 +29,9 @@ if st.sidebar.button("Generate Signals"):
             if st.button("Send Selected Signal"):
                 row = signals_df[signals_df["Signal"] == selected_signal].iloc[0]
                 msg = (
-                    f"🔍 *Signal:* {row['Signal']}\n"
-                    f"💸 *Entry:* {row['Entry']} | 🎯 *Target:* {row['Target']} | 🛑 *SL:* {row['Stop Loss']}\n"
-                    f"📊 *Strategy:* {row['Strategy']} | 🕓 *Expiry:* {row['Expiry']}"
+                    f"*Signal:* {row['Signal']}\n"
+                    f"*Entry:* {row['Entry']} | *Target:* {row['Target']} | *SL:* {row['Stop Loss']}\n"
+                    f"*Strategy:* {row['Strategy']} | *Expiry:* {row['Expiry']}"
                 )
                 sent = send_telegram_message(msg)
                 if sent:
