@@ -59,6 +59,15 @@ def get_symbol(index):
 def fetch_data(symbol):
     df = yf.download(symbol, period="5d", interval="5m", progress=False, auto_adjust=True)
     df.dropna(inplace=True)
+
+    # ✅ Flatten MultiIndex columns if any
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    required_cols = ["Open", "High", "Low", "Close", "Volume"]
+    if not all(col in df.columns for col in required_cols):
+        return pd.DataFrame()
+
     return df
 
 def calculate_indicators(df):
@@ -98,7 +107,7 @@ def generate_signals_multi(index, strike_type, expiry_date):
     results = []
 
     for strategy in strategies:
-        # Strategy-specific strike selection
+        # Strategy-wise strike logic
         if strategy == "Safe (OI Support)":
             strike = oi_data["support_strike"] if signal_direction == "BUY" else oi_data["resistance_strike"]
             source = "OI Support/Resistance"
