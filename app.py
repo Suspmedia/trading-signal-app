@@ -1,58 +1,64 @@
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 import pandas as pd
 import datetime
 from signal_engine import generate_signals_multi, backtest_mock
 from telegram_alert import send_telegram_message, log_trade
 
-st.set_page_config(page_title="📈 Options Signal Generator", layout="wide")
-st.title("📊 Automated Options Signal Engine")
+# ------------------- Configuration -------------------
+st.set_page_config(page_title="📈 Auto Options Signal Bot", layout="wide")
+st.title("📊 Automated Options Signal Generator")
 
-# Sidebar Inputs
+# 🔁 Auto-refresh every 10 minutes (600,000 ms)
+st_autorefresh(interval=600000, limit=None, key="auto_refresh")
+
+# ------------------- Sidebar -------------------
 st.sidebar.header("🔧 Configuration")
 index = st.sidebar.selectbox("Select Index", ["NIFTY", "BANKNIFTY", "SENSEX"])
 strike_type = st.sidebar.radio("Strike Type", ["ATM", "ITM", "OTM"])
 expiry_date = st.sidebar.date_input("Select Expiry Date", datetime.date.today())
+auto_send = st.sidebar.checkbox("✅ Auto-Send to Telegram", value=True)
 
-# Generate Signals
-if st.sidebar.button("🚀 Generate All Strategies"):
-    with st.spinner("🔍 Generating signals for all 5 strategies..."):
+# ------------------- Signal Generation -------------------
+if st.sidebar.button("🚀 Generate Signals"):
+    with st.spinner("⏳ Analyzing strategies..."):
         signals_df = generate_signals_multi(index, strike_type, expiry_date)
 
         if not signals_df.empty:
-            st.success("✅ Strategies Generated!")
-            st.subheader("📌 Signals Grouped by Premium Band")
+            st.success(f"✅ {len(signals_df)} Signals Generated!")
 
-            # Show grouped signals
+            # 📦 Group by Premium Band
             for band in signals_df["Premium Band"].unique():
-                group_df = signals_df[signals_df["Premium Band"] == band]
+                band_df = signals_df[signals_df["Premium Band"] == band]
                 st.markdown(f"### 💰 Premium Band: `{band}`")
-                st.dataframe(group_df, use_container_width=True)
+                st.dataframe(band_df, use_container_width=True)
 
-                for i, row in group_df.iterrows():
+                for i, row in band_df.iterrows():
                     msg = (
                         f"🔍 Signal: {row['Signal']}\n"
                         f"💸 Entry: ₹{row['Entry']} | 🎯 Target: ₹{row['Target']} | 🛑 SL: ₹{row['Stop Loss']}\n"
-                        f"📊 Strategy: {row['Strategy']} ({row['Reason']})\n"
+                        f"📊 Strategy: {row['Strategy']} ({row.get('Reason', '-')})\n"
                         f"📅 Expiry: {row['Expiry']} | 💰 Band: {row['Premium Band']}"
                     )
-                    if st.button(f"📤 Send to Telegram: {row['Signal']}", key=f"btn_{i}"):
+                    
+                    if auto_send:
                         sent = send_telegram_message(msg)
                         if sent:
-                            st.success("✅ Sent to Telegram!")
+                            st.success(f"📤 Sent: {row['Signal']}")
                             log_trade(row)
                         else:
-                            st.error("❌ Failed to send.")
-
-            # Show Backtest
-            st.markdown("### 🧪 Backtest Summary")
-            backtest_df = backtest_mock(signals_df)
-            st.dataframe(backtest_df, use_container_width=True)
+                            st.error(f"❌ Failed to send: {row['Signal']}")
 
         else:
-            st.warning("⚠️ No strong signals found with current indicators or volume filters.")
+            st.warning("⚠️ No strong signals found with current strategy and filters.")
 
-# Trade History Section
-st.markdown("## 🧾 Trade History Log")
+        # ------------------- Backtest Results -------------------
+        st.markdown("### 🧪 Backtest Summary")
+        bt_summary = backtest_mock(signals_df)
+        st.dataframe(bt_summary, use_container_width=True)
+
+# ------------------- Trade History -------------------
+st.markdown("## 📘 Trade History")
 try:
     df_log = pd.read_csv("trade_log.csv")
     st.dataframe(df_log, use_container_width=True)
