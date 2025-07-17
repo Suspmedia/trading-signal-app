@@ -16,12 +16,13 @@ def send_telegram_message(message):
     }
     try:
         response = requests.post(url, data=payload)
+        print("Telegram response:", response.status_code, response.text)  # Logs
         return response.status_code == 200
     except Exception as e:
         print("Telegram send failed:", e)
         return False
 
-# ✅ Log each trade to CSV
+# ✅ Trade Logger
 LOG_FILE = "trade_log.csv"
 
 def log_trade(row):
