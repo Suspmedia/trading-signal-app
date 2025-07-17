@@ -13,7 +13,7 @@ def get_oi_levels(index="NIFTY"):
     }
 
     if index not in symbol_map:
-        return {"support": None, "resistance": None, "note": "OI not available"}
+        return {"support_strike": None, "resistance_strike": None}
 
     headers = {
         "User-Agent": "Mozilla/5.0"
@@ -62,17 +62,13 @@ def get_symbol(index):
 def fetch_data(symbol):
     df = yf.download(symbol, period="5d", interval="5m", progress=False)
     df.dropna(inplace=True)
-
     if df.empty:
         return pd.DataFrame()
-
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
-
     required_cols = ["Open", "High", "Low", "Close", "Volume"]
     if not all(col in df.columns for col in required_cols):
         return pd.DataFrame()
-
     return df
 
 def calculate_indicators(df):
@@ -96,20 +92,16 @@ def is_signal(df):
 def generate_signals(index, strategy, strike_type, expiry_date):
     symbol = get_symbol(index)
     df = fetch_data(symbol)
-    
     if df.empty:
         return pd.DataFrame()
 
     df = calculate_indicators(df)
     signal = is_signal(df)
-
     if signal is None:
         return pd.DataFrame()
 
     last_price = df["Close"].iloc[-1]
     atm_strike = round(last_price / 50) * 50
-
-    # ----------------- OI Strike Selection -----------------
     oi_data = get_oi_levels(index)
 
     if signal == "BUY" and oi_data["support_strike"]:
@@ -119,7 +111,6 @@ def generate_signals(index, strategy, strike_type, expiry_date):
         strike = oi_data["resistance_strike"]
         source = "OI Resistance"
     else:
-        # Fallback to strategy-based
         source = "Default"
         if strike_type == "ATM":
             strike = atm_strike
