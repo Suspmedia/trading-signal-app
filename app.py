@@ -1,65 +1,92 @@
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
-import pandas as pd
 import datetime
-import requests
-import plotly.graph_objects as go
-from signal_engine import generate_signals_multi, backtest_mock
+import pandas as pd
+
+from signal_engine import generate_signals_multi
+from stock_engine import generate_stock_signals, NIFTY_50
 from telegram_alert import send_telegram_message, log_trade
 
-# ------------------- Configuration -------------------
+# ----------------- Page Setup -----------------
 st.set_page_config(page_title="📈 Option Signal Generator", layout="wide")
 st.title("📊 Automated Options Signal Generator")
 
-# 🔁 Auto-refresh entire page every 10 minutes
-st_autorefresh(interval=600000, limit=None, key="main_refresh")
+# 🔁 Auto-refresh every 10 minutes
+st_autorefresh(interval=600000, limit=None, key="main_autorefresh")
 
-# ------------------- Sidebar -------------------
-st.sidebar.header("🔧 Signal Configuration")
-index = st.sidebar.selectbox("Select Index", ["NIFTY", "BANKNIFTY", "SENSEX"])
-strike_type = st.sidebar.radio("Strike Type", ["ATM", "ITM", "OTM"])
-expiry_date = st.sidebar.date_input("Select Expiry Date", datetime.date.today())
-auto_send = st.sidebar.checkbox("✅ Auto-Send to Telegram", value=True)
+# ----------------- Mode Selector -----------------
+mode = st.radio("Choose Mode", ["📊 Index Options", "📦 Stock Options"])
 
-# ------------------- Signal Generator -------------------
-if st.sidebar.button("🚀 Generate Signals"):
-    with st.spinner("⏳ Analyzing strategies..."):
-        signals_df = generate_signals_multi(index, strike_type, expiry_date)
+# ----------------- Index Option Section -----------------
+if mode == "📊 Index Options":
+    st.sidebar.header("🧮 Index Signal Settings")
+    index = st.sidebar.selectbox("Select Index", ["NIFTY", "BANKNIFTY", "SENSEX"])
+    strike_type = st.sidebar.radio("Strike Type", ["ATM", "ITM", "OTM"])
+    expiry_date = st.sidebar.date_input("Select Expiry Date", datetime.date.today())
+    auto_send = st.sidebar.checkbox("📤 Auto-Send to Telegram", value=True)
 
-        if not signals_df.empty:
-            st.success(f"✅ {len(signals_df)} Signals Generated!")
+    if st.sidebar.button("🚀 Generate Index Signals"):
+        with st.spinner("🔍 Analyzing index..."):
+            signals_df = generate_signals_multi(index, strike_type, expiry_date)
 
-            # Show signals by Premium Band
-            for band in signals_df["Premium Band"].unique():
-                band_df = signals_df[signals_df["Premium Band"] == band]
-                st.markdown(f"### 💰 Premium Band: `{band}`")
-                st.dataframe(band_df, use_container_width=True)
+            if not signals_df.empty:
+                st.success(f"✅ {len(signals_df)} Signals Generated")
 
-                for i, row in band_df.iterrows():
+                for i, row in signals_df.iterrows():
+                    st.markdown(f"### 📌 {row['Signal']}")
+                    st.write(row)
+
                     msg = (
                         f"🔍 Signal: {row['Signal']}\n"
                         f"💸 Entry: ₹{row['Entry']} | 🎯 Target: ₹{row['Target']} | 🛑 SL: ₹{row['Stop Loss']}\n"
-                        f"📊 Strategy: {row['Strategy']} ({row.get('Reason', '-')})\n"
-                        f"📅 Expiry: {row['Expiry']} | 💰 Band: {row['Premium Band']}"
+                        f"📊 Strategy: {row['Strategy']} | 🕓 Expiry: {row['Expiry']}"
                     )
 
                     if auto_send:
                         sent = send_telegram_message(msg)
                         if sent:
-                            st.success(f"📤 Sent: {row['Signal']}")
+                            st.success("📤 Sent to Telegram")
                             log_trade(row)
                         else:
-                            st.error(f"❌ Failed to send: {row['Signal']}")
+                            st.error("❌ Failed to send to Telegram")
+            else:
+                st.warning("⚠️ No strong signals found.")
 
-        else:
-            st.warning("⚠️ No strong signals found with current strategy and filters.")
+# ----------------- Stock Option Section -----------------
+elif mode == "📦 Stock Options":
+    st.sidebar.header("📦 Stock Signal Settings")
+    stock = st.sidebar.selectbox("Select Stock (NIFTY 50)", sorted(NIFTY_50))
+    strike_type = st.sidebar.radio("Strike Type", ["ATM", "ITM", "OTM"])
+    expiry_date = st.sidebar.date_input("Select Expiry Date", datetime.date.today())
+    strategy = st.sidebar.radio("Strategy", ["Safe", "Min Investment", "Max Profit", "Reversal", "Breakout"])
+    auto_send = st.sidebar.checkbox("📤 Auto-Send to Telegram", value=True)
 
-        # Backtest Summary
-        st.markdown("### 🧪 Backtest Summary")
-        bt_summary = backtest_mock(signals_df)
-        st.dataframe(bt_summary, use_container_width=True)
+    if st.sidebar.button("🚀 Generate Stock Signal"):
+        with st.spinner(f"Analyzing {stock}..."):
+            signal_df = generate_stock_signals(stock, strategy, strike_type, expiry_date)
 
-# ------------------- Trade History -------------------
+            if not signal_df.empty:
+                st.success("✅ Signal Generated")
+                st.dataframe(signal_df, use_container_width=True)
+
+                row = signal_df.iloc[0]
+                msg = (
+                    f"🔍 Signal: {row['Signal']}\n"
+                    f"💸 Entry: ₹{row['Entry']} | 🎯 Target: ₹{row['Target']} | 🛑 SL: ₹{row['Stop Loss']}\n"
+                    f"📊 Strategy: {row['Strategy']} | 🕓 Expiry: {row['Expiry']}"
+                )
+
+                if auto_send:
+                    sent = send_telegram_message(msg)
+                    if sent:
+                        st.success("📤 Sent to Telegram")
+                        log_trade(row)
+                    else:
+                        st.error("❌ Failed to send to Telegram")
+            else:
+                st.warning("⚠️ No strong signals found.")
+
+# ----------------- Trade History -----------------
 st.markdown("## 📘 Trade History")
 try:
     df_log = pd.read_csv("trade_log.csv")
@@ -67,60 +94,3 @@ try:
     st.info(f"📌 Total Trades Logged: {len(df_log)}")
 except FileNotFoundError:
     st.warning("No trade history yet.")
-
-# ------------------- Real-Time Premium Chart Section -------------------
-st.markdown("## 📈 Real-Time Option Premium Chart (Live Market Only)")
-
-# Refresh every 5 min for this section
-st_autorefresh(interval=300000, limit=None, key="chart_refresh")
-
-# Option Chart Inputs
-st.subheader("🔍 Chart Configuration")
-chart_index = st.selectbox("Chart Index", ["NIFTY", "BANKNIFTY"])
-option_type = st.radio("Option Type", ["CE", "PE"], horizontal=True)
-chart_strike = st.number_input("Strike Price", min_value=10000, max_value=55000, step=50)
-chart_expiry = st.date_input("Expiry Date", value=datetime.date.today())
-
-# Check if market is open
-now = datetime.datetime.now()
-is_market_live = now.weekday() < 5 and datetime.time(9, 15) <= now.time() <= datetime.time(15, 30)
-
-def get_option_premium_chart_data(symbol, strike, expiry, opt_type):
-    try:
-        url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        session = requests.Session()
-        session.get("https://www.nseindia.com", headers=headers)
-        response = session.get(url, headers=headers)
-        data = response.json()
-
-        rows = data["records"]["data"]
-        for row in rows:
-            if row.get("strikePrice") == strike:
-                option = row.get(opt_type, {})
-                if option.get("expiryDate") == expiry.strftime("%d-%b-%Y"):
-                    return option.get("lastPrice")
-
-        return None
-    except Exception as e:
-        st.error(f"Data error: {e}")
-        return None
-
-# Plot chart if market is live
-if is_market_live:
-    st.success("📡 Market is live. Fetching real-time premiums...")
-    key = f"{chart_index}_{option_type}_{chart_strike}_{chart_expiry}"
-    if "price_log" not in st.session_state:
-        st.session_state.price_log = {}
-
-    price = get_option_premium_chart_data(chart_index, chart_strike, chart_expiry, option_type)
-    if price:
-        st.session_state.price_log.setdefault(key, []).append((now, price))
-        df_chart = pd.DataFrame(st.session_state.price_log[key], columns=["Time", "Premium"])
-        fig = go.Figure(data=go.Scatter(x=df_chart["Time"], y=df_chart["Premium"], mode="lines+markers"))
-        fig.update_layout(title=f"{chart_index} {chart_strike} {option_type} Premium", xaxis_title="Time", yaxis_title="Premium")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("⚠️ Could not fetch premium. Try a different strike or expiry.")
-else:
-    st.info("📴 Market is closed. Chart will update during live hours (Mon–Fri, 9:15–15:30).")
