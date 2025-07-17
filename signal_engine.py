@@ -60,7 +60,7 @@ def get_symbol(index):
     }.get(index, "^NSEI")
 
 def fetch_data(symbol):
-    df = yf.download(symbol, period="5d", interval="5m", progress=False)
+    df = yf.download(symbol, period="5d", interval="5m", progress=False, auto_adjust=True)
     df.dropna(inplace=True)
     if df.empty:
         return pd.DataFrame()
@@ -83,10 +83,22 @@ def is_signal(df):
     if df.empty:
         return None
     latest = df.iloc[-1]
-    if latest["RSI"] < 30 and latest["MACD"] > latest["MACD_signal"] and latest["Close"] > latest["VWAP"]:
+
+    # Debug print for development (remove in production)
+    print(f"RSI: {latest['RSI']:.2f}, MACD: {latest['MACD']:.2f}, Signal: {latest['MACD_signal']:.2f}, Close: {latest['Close']:.2f}, VWAP: {latest['VWAP']:.2f}")
+
+    # Strong signals
+    if latest["RSI"] < 40 and latest["MACD"] > latest["MACD_signal"] and latest["Close"] > latest["VWAP"]:
         return "BUY"
-    if latest["RSI"] > 70 and latest["MACD"] < latest["MACD_signal"] and latest["Close"] < latest["VWAP"]:
+    if latest["RSI"] > 60 and latest["MACD"] < latest["MACD_signal"] and latest["Close"] < latest["VWAP"]:
         return "SELL"
+
+    # Weak signals
+    if 40 <= latest["RSI"] <= 45 and latest["MACD"] > latest["MACD_signal"]:
+        return "WEAK_BUY"
+    if 55 <= latest["RSI"] <= 60 and latest["MACD"] < latest["MACD_signal"]:
+        return "WEAK_SELL"
+
     return None
 
 def generate_signals(index, strategy, strike_type, expiry_date):
@@ -98,16 +110,25 @@ def generate_signals(index, strategy, strike_type, expiry_date):
     df = calculate_indicators(df)
     signal = is_signal(df)
     if signal is None:
-        return pd.DataFrame()
+        return pd.DataFrame({
+            "Signal": ["No strong signal found"],
+            "Entry": [""],
+            "Target": [""],
+            "Stop Loss": [""],
+            "Strategy": [strategy],
+            "Strike Type": [strike_type],
+            "Expiry": [expiry_date.strftime("%d %b %Y")]
+        })
 
     last_price = df["Close"].iloc[-1]
     atm_strike = round(last_price / 50) * 50
     oi_data = get_oi_levels(index)
 
-    if signal == "BUY" and oi_data["support_strike"]:
+    # Determine strike based on OI or fallback
+    if signal in ["BUY", "WEAK_BUY"] and oi_data["support_strike"]:
         strike = oi_data["support_strike"]
         source = "OI Support"
-    elif signal == "SELL" and oi_data["resistance_strike"]:
+    elif signal in ["SELL", "WEAK_SELL"] and oi_data["resistance_strike"]:
         strike = oi_data["resistance_strike"]
         source = "OI Resistance"
     else:
@@ -119,17 +140,17 @@ def generate_signals(index, strategy, strike_type, expiry_date):
         else:
             strike = atm_strike + 100
 
-    option_type = "CE" if signal == "BUY" else "PE"
+    option_type = "CE" if "BUY" in signal else "PE"
     entry = round(40 + (last_price % 20), 2)
     target = round(entry * 2.1, 2)
     sl = round(entry * 0.7, 2)
 
     signal_data = {
-        "Signal": [f"{index} {signal} {strike} {option_type}"],
+        "Signal": [f"{index} {signal.replace('WEAK_', '')} {strike} {option_type}"],
         "Entry": [f"₹{entry}"],
         "Target": [f"₹{target}"],
         "Stop Loss": [f"₹{sl}"],
-        "Strategy": [strategy],
+        "Strategy": [strategy + (" (Weak Setup)" if "WEAK" in signal else "")],
         "Strike Type": [strike_type + f" ({source})"],
         "Expiry": [expiry_date.strftime("%d %b %Y")]
     }
