@@ -98,3 +98,13 @@ try:
     st.info(f"📌 Total Trades Logged: {len(df_log)}")
 except FileNotFoundError:
     st.warning("No trade history yet.")
+
+# ---------- Disclaimer Footer ----------
+st.markdown("""
+<hr style='border:1px solid #999999;' />
+
+<div style='text-align: center; color: gray; font-size: 14px;'>
+🔒 <b>Disclaimer:</b> This tool is for personal research and educational purposes only.<br>
+It is not financial advice. The creator is not a SEBI-registered advisor. Use at your own risk.
+</div>
+""", unsafe_allow_html=True)
