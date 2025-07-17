@@ -1,10 +1,11 @@
-# telegram_alert.py
-
 import requests
+import streamlit as st
+import csv
+from datetime import datetime
 import os
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "7623965196:AAGTNQwy6uYM76BIn5WQ_mv5Ae4MJ3hRlzk")
-CHAT_ID = os.getenv("CHAT_ID", "521053521")
+BOT_TOKEN = st.secrets["BOT_TOKEN"]
+CHAT_ID = st.secrets["CHAT_ID"]
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -19,3 +20,22 @@ def send_telegram_message(message):
     except Exception as e:
         print("Telegram send failed:", e)
         return False
+
+# ✅ Log each trade to CSV
+LOG_FILE = "trade_log.csv"
+
+def log_trade(row):
+    file_exists = os.path.isfile(LOG_FILE)
+    with open(LOG_FILE, mode="a", newline="") as file:
+        writer = csv.writer(file)
+        if not file_exists:
+            writer.writerow(["Timestamp", "Signal", "Entry", "Target", "Stop Loss", "Strategy", "Expiry"])
+        writer.writerow([
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            row["Signal"],
+            row["Entry"],
+            row["Target"],
+            row["Stop Loss"],
+            row["Strategy"],
+            row["Expiry"]
+        ])
