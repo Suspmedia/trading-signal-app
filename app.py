@@ -2,32 +2,32 @@ import streamlit as st
 import pandas as pd
 import datetime
 from streamlit_autorefresh import st_autorefresh
-from signal_engine import generate_signals
+from signal_engine import generate_signals_multi
 from telegram_alert import send_telegram_message, log_trade
 
-# Auto-refresh every 10 minutes (600,000 ms)
+# Auto-refresh every 10 minutes
 st_autorefresh(interval=600000, key="auto-refresh")
 
-# App Layout
 st.set_page_config(page_title="Trading Signal App", layout="wide")
 st.title("📈 Options Trading Signal Generator")
 
-# Sidebar Configuration
+# Sidebar Controls
 st.sidebar.header("🔍 Configuration")
 index = st.sidebar.selectbox("Select Index", ["NIFTY", "BANKNIFTY", "SENSEX"])
-strategy = st.sidebar.radio("Select Strategy", ["Safe", "Min Investment", "Max Profit"])
 strike_type = st.sidebar.radio("Strike Type", ["ATM", "ITM", "OTM"])
 expiry_date = st.sidebar.date_input("Select Expiry Date", datetime.date.today())
 
+# Generate Signals
 if st.sidebar.button("Generate Signals"):
-    with st.spinner("🔄 Analyzing data..."):
-        signals_df = generate_signals(index, strategy, strike_type, expiry_date)
-        if not signals_df.empty:
+    with st.spinner("🔄 Analyzing strategies..."):
+        signals_df = generate_signals_multi(index, strike_type, expiry_date)
+        if not signals_df.empty and "No strong signal" not in signals_df["Signal"].iloc[0]:
             st.success("✅ Signals Generated!")
             st.dataframe(signals_df, use_container_width=True)
 
-            # Auto-send each signal to Telegram
-            for i, row in signals_df.iterrows():
+            selected_signal = st.selectbox("📤 Choose a signal to send to Telegram", signals_df["Signal"])
+            if st.button("Send Selected Signal"):
+                row = signals_df[signals_df["Signal"] == selected_signal].iloc[0]
                 msg = (
                     f"🔍 *Signal:* {row['Signal']}\n"
                     f"💸 *Entry:* {row['Entry']} | 🎯 *Target:* {row['Target']} | 🛑 *SL:* {row['Stop Loss']}\n"
@@ -35,19 +35,18 @@ if st.sidebar.button("Generate Signals"):
                 )
                 sent = send_telegram_message(msg)
                 if sent:
-                    st.success(f"✅ Signal sent to Telegram: {row['Signal']}")
+                    st.success("✅ Signal sent to Telegram!")
                     log_trade(row)
                 else:
-                    st.error(f"❌ Failed to send: {row['Signal']}")
+                    st.error("❌ Failed to send to Telegram.")
         else:
             st.warning("⚠️ No strong signals found.")
 
-# Trade History Section
+# Trade History
 st.header("📊 Trade History")
 try:
     df_log = pd.read_csv("trade_log.csv")
     st.dataframe(df_log, use_container_width=True)
-    total_trades = len(df_log)
-    st.info(f"✅ Total Trades Logged: {total_trades}")
+    st.info(f"✅ Total Trades Logged: {len(df_log)}")
 except FileNotFoundError:
     st.warning("No trade history found yet.")
