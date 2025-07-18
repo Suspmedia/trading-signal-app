@@ -27,21 +27,22 @@ if mode == "📊 Index Options":
 
     if st.sidebar.button("🚀 Generate Index Signals"):
         with st.spinner("Analyzing index..."):
-            signals_df = generate_signals_multi(index, strike_type, expiry_date)
+            signals_df, index_ltp = generate_signals_multi(index, strike_type, expiry_date)
             if not signals_df.empty:
                 st.success(f"✅ {len(signals_df)} Signals Found")
+                st.markdown(f"**📈 Index LTP:** ₹{index_ltp}")
                 for _, row in signals_df.iterrows():
                     st.write(row)
 
                     msg = (
                         f"🔍 Signal: {row['Signal']}\n"
-                        f"💸 Entry: ₹{row['Entry']} | 🎯 Target: ₹{row['Target']} | 🛑 SL: ₹{row['Stop Loss']}\n"
-                        f"📊 Strategy: {row['Strategy']} | 🕓 Expiry: {row['Expiry']}"
+                        f"📈 Index LTP: ₹{row['Index LTP']}\n"
+                        f"💸 Entry: ₹{row['Entry']} | 🌟 Target: ₹{row['Target']} | 🚑 SL: ₹{row['Stop Loss']}\n"
+                        f"📊 Strategy: {row['Strategy']} | 🦓 Expiry: {row['Expiry']}"
                     )
                     if auto_send:
                         sent = send_telegram_message(msg)
                         if sent:
-                            st.success("📤 Sent to Telegram")
                             log_trade(row)
                         else:
                             st.error("❌ Failed to send to Telegram")
@@ -57,7 +58,7 @@ elif mode == "📦 Stock Options":
     auto_send = st.sidebar.checkbox("📤 Auto-Send to Telegram", value=True)
 
     # Smart suggestions
-    st.subheader("🧠 Suggested Stocks with Signals")
+    st.subheader("🧐 Suggested Stocks with Signals")
     with st.spinner("Scanning F&O stocks..."):
         suggested = get_suggested_stocks(expiry_date, strategy, strike_type)
         suggested_symbols = [sym for sym, df in suggested]
@@ -71,19 +72,20 @@ elif mode == "📦 Stock Options":
             signal_df = generate_stock_signals(stock_to_check, strategy, strike_type, expiry_date)
             if not signal_df.empty:
                 st.success("✅ Signal Generated")
+                st.write(f"📈 Stock LTP: ₹{signal_df.iloc[0]['Stock LTP']}")
                 st.dataframe(signal_df, use_container_width=True)
 
                 row = signal_df.iloc[0]
                 msg = (
                     f"🔍 Signal: {row['Signal']}\n"
-                    f"💸 Entry: ₹{row['Entry']} | 🎯 Target: ₹{row['Target']} | 🛑 SL: ₹{row['Stop Loss']}\n"
-                    f"📊 Strategy: {row['Strategy']} | 🕓 Expiry: {row['Expiry']}"
+                    f"📈 Stock LTP: ₹{row['Stock LTP']}\n"
+                    f"💸 Entry: ₹{row['Entry']} | 🌟 Target: ₹{row['Target']} | 🚑 SL: ₹{row['Stop Loss']}\n"
+                    f"📊 Strategy: {row['Strategy']} | 🦓 Expiry: {row['Expiry']}"
                 )
 
                 if auto_send:
                     sent = send_telegram_message(msg)
                     if sent:
-                        st.success("📤 Sent to Telegram")
                         log_trade(row)
                     else:
                         st.error("❌ Failed to send to Telegram")
@@ -104,7 +106,7 @@ st.markdown("""
 <hr style='border:1px solid #999999;' />
 
 <div style='text-align: center; color: gray; font-size: 14px;'>
-🔒 <b>Disclaimer:</b> This tool is for personal research and educational purposes only.<br>
+🔐 <b>Disclaimer:</b> This tool is for personal research and educational purposes only.<br>
 It is not financial advice. The creator is not a SEBI-registered advisor. Use at your own risk.
 </div>
 """, unsafe_allow_html=True)
