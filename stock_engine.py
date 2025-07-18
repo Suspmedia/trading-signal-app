@@ -93,7 +93,7 @@ def generate_stock_signals(stock, strategy, strike_type, expiry_date):
     if not signal:
         return pd.DataFrame()
 
-    last_price = df["Close"].iloc[-1]
+    last_price = round(df["Close"].iloc[-1], 2)
     atm_strike = round(last_price / 10) * 10
     oi_data = get_stock_oi_levels(stock)
 
@@ -127,7 +127,8 @@ def generate_stock_signals(stock, strategy, strike_type, expiry_date):
         "Stop Loss": [sl],
         "Strategy": [strategy],
         "Strike Type": [strike_type + f" ({source})"],
-        "Expiry": [expiry_date.strftime("%d %b %Y")]
+        "Expiry": [expiry_date.strftime("%d %b %Y")],
+        "Stock LTP": [last_price]  # ✅ New column
     }
 
     return pd.DataFrame(signal_data)
