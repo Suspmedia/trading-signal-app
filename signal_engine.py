@@ -80,18 +80,19 @@ def premium_band(entry):
     else:
         return "₹151+"
 
+# ---------------------- MAIN SIGNAL GENERATOR ----------------------
 def generate_signals_multi(index, strike_type, expiry_date):
     df = fetch_data(get_symbol(index))
     if df.empty:
-        return pd.DataFrame()
+        return pd.DataFrame(), None
 
     df = calculate_indicators(df)
     current = df.iloc[-1]
     avg_volume = df["Volume"].rolling(window=20).mean().iloc[-1]
     if current["Volume"] < 1.2 * avg_volume:
-        return pd.DataFrame()
+        return pd.DataFrame(), round(current["Close"], 2)
 
-    last_price = current["Close"]
+    last_price = round(current["Close"], 2)
     atm_strike = round(last_price / 50) * 50
     oi_data = get_oi_levels(index)
     option_chain = get_option_chain_ltp(index)
@@ -146,7 +147,6 @@ def generate_signals_multi(index, strike_type, expiry_date):
                 reason = "Breakout Down"
             else:
                 continue
-
         else:
             continue
 
@@ -163,10 +163,11 @@ def generate_signals_multi(index, strike_type, expiry_date):
             "Strategy": strategy,
             "Reason": reason,
             "Premium Band": premium_band(entry),
-            "Expiry": expiry_date.strftime("%d %b %Y")
+            "Expiry": expiry_date.strftime("%d %b %Y"),
+            "Index LTP": last_price
         })
 
-    return pd.DataFrame(results)
+    return pd.DataFrame(results), last_price
 
 # ---------------------- BACKTEST MOCKUP ----------------------
 def backtest_mock(df_signals):
